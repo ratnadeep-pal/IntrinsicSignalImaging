@@ -7,10 +7,11 @@ from datetime import timedelta
 from collections import defaultdict
 import PySimpleGUI as sg
 
-def intrinsic_imaging(target_folder = 'C:/Users/rpal/Documents/MATLAB/20221219_145219',row = 520,column = 696,cutoff_time = 10,MAX_FRAMES = 500):
+def intrinsic_imaging(target_folder = 'C:/Users/rpal/Documents/MATLAB/20221219_145219',row = 520,column = 696,cutoff_time = 10,MAX_FRAMES = 500,baseline_start=0,baseline_stop=2,
+stimuli_start=3,stimuli_stop=5):
 
     cutoff_delta = timedelta(seconds = cutoff_time)
-
+    
 
     #Extract the event triggers from EventLog.txt
     trigger_timestamp=defaultdict(int)
@@ -53,8 +54,8 @@ def intrinsic_imaging(target_folder = 'C:/Users/rpal/Documents/MATLAB/20221219_1
                 f.close()
 
 
-    baseline = frames_s_w[:,0:2] 
-    stimuli  = frames_s_w[:,3:4]
+    baseline = frames_s_w[:,baseline_start:baseline_stop] 
+    stimuli  = frames_s_w[:,stimuli_start:stimuli_stop]
 
     baseline_mean = np.mean(baseline[np.where(np.mean(baseline,axis=(3,4))>50)],axis=0)
     stimuli_mean  = np.mean(stimuli[np.where(np.mean(stimuli,axis=(3,4))>50)],axis=0)
@@ -62,10 +63,13 @@ def intrinsic_imaging(target_folder = 'C:/Users/rpal/Documents/MATLAB/20221219_1
     result = np.divide(baseline_mean - stimuli_mean,baseline_mean)
 
     plt.figure()
+    plt.title("Difference")
     plt.imshow(result) 
     plt.figure()
+    plt.title("Baseline")
     plt.imshow(baseline_mean,cmap='gray')
     plt.figure()
+    plt.title("Stimuli")
     plt.imshow(stimuli_mean,cmap='gray')
     plt.show()
 
@@ -74,8 +78,10 @@ def main():
 
     layout = [[sg.Text('Select Image Folder'),sg.In(key='-in_folder-')],
             [sg.FolderBrowse(target='-in_folder-'), sg.OK()],
-            [sg.Text('Row'),sg.Input(default_text='520',s=4,key='-in_row-'),sg.Text('Column'),sg.Input(default_text='696',s=4,key='-in_col-')],
-            [sg.Text('Cutoff'), sg.Input(default_text='10',s=4,key='-in_cutoff-'),sg.Text('Max Frame'), sg.Input(default_text='500',s=4,key='-in_mf-')],
+            [sg.Text('Row'),sg.Input(default_text='520',s=4,key='-in_row-'),sg.Text('Column'),sg.Input(default_text='696',s=4,key='-in_col-'),
+            sg.Text('Cutoff'), sg.Input(default_text='10',s=4,key='-in_cutoff-'),sg.Text('Max Frame'), sg.Input(default_text='500',s=4,key='-in_mf-')],
+            [sg.Text('Baseline'), sg.Input(default_text='0',s=2,key='-in_bl_sa-'),sg.Text('to'), sg.Input(default_text='2',s=2,key='-in_bl_so-'),
+            sg.Text('Stimuli'), sg.Input(default_text='3',s=2,key='-in_st_sa-'),sg.Text('to'), sg.Input(default_text='5',s=2,key='-in_st_so-')],
             [sg.Text(key='-OUTPUT-')],
             [sg.Button('Run'), sg.Button('Exit')]]
 
@@ -84,6 +90,7 @@ def main():
     while True:  # Event Loop
         event, values = window.read()
         print(event, values)
+        all_fields = 1
         if event == sg.WIN_CLOSED or event == 'Exit':
             break
         if event == 'Run':
@@ -91,15 +98,23 @@ def main():
 
             for key in values:
               if values[key] == '':
-                window['-OUTPUT-'].update(f"Keys Missing!! Please enter {values[key]}")
+                window['-OUTPUT-'].update(f"Some key values are missing!!")
+                all_fields = 0
+            if (all_fields):
+                folder = values['-in_folder-']
+                row = int(values['-in_row-'])
+                column = int(values['-in_col-'])
+                cutoff = int(values['-in_cutoff-'])
+                max_frame = int(values['-in_mf-'])
+                baseline_start=int(values['-in_bl_sa-'])
+                baseline_stop=int(values['-in_bl_so-'])
+                stimuli_start=int(values['-in_st_sa-'])
+                stimuli_stop=int(values['-in_st_so-'])
+                intrinsic_imaging(target_folder=folder, row=row, column=column, cutoff_time=cutoff, MAX_FRAMES=max_frame,baseline_start=baseline_start,baseline_stop=baseline_stop,
+    stimuli_start=stimuli_start,stimuli_stop=stimuli_stop)
+                window['-OUTPUT-'].update(f"SUCCESS!!")
+            else:
                 continue
-            folder = values['-in_folder-']
-            row = int(values['-in_row-'])
-            column = int(values['-in_col-'])
-            cutoff = int(values['-in_cutoff-'])
-            max_frame = int(values['-in_mf-'])
-            intrinsic_imaging(target_folder=folder, row=row, column=column, cutoff_time=cutoff, MAX_FRAMES=max_frame)
-            window['-OUTPUT-'].update(f"SUCCESS!!")
     window.close()
     
 
