@@ -8,7 +8,7 @@ from collections import defaultdict
 import PySimpleGUI as sg
 
 def intrinsic_imaging(target_folder = 'C:/Users/rpal/Documents/MATLAB/20221219_145219',row = 520,column = 696,cutoff_time = 10,MAX_FRAMES = 500,baseline_start=0,baseline_stop=2,
-stimuli_start=3,stimuli_stop=5):
+stimuli_start=3,stimuli_stop=5,filtering=True,filter_size=5):
 
     cutoff_delta = timedelta(seconds = cutoff_time)
     
@@ -28,7 +28,7 @@ stimuli_start=3,stimuli_stop=5):
 
     trigger = 0
     frame = 0 
-    frames_s_w = np.zeros((NUM_TRIGGER,cutoff_time, MAX_FRAMES, row,column),dtype = np.uint16 )
+    frames_s_w = np.zeros((NUM_TRIGGER,cutoff_time, MAX_FRAMES, row,column),dtype = np.uint8 )
     image_file_list = sorted(os.listdir(target_folder+'/Camera #1/ManualRecording'))
     for image_file in image_file_list:
         im_f = image_file.split('_')
@@ -47,8 +47,10 @@ stimuli_start=3,stimuli_stop=5):
                     continue
             with open(target_folder+'/Camera #1/ManualRecording/'+image_file,'rb') as f:
                 image = np.fromfile(f, dtype = np.uint16, count = row*column)
+                image = (image//257).astype(np.uint8)
                 image = image.reshape(row,column)
-                image = cv.GaussianBlur(image,(5,5),0)
+                if (filtering):
+                    image = cv.GaussianBlur(image,(filter_size,filter_size),0)
                 frames_s_w[trigger][delta.seconds][frame] = image
                 frame += 1
                 f.close()
@@ -57,10 +59,15 @@ stimuli_start=3,stimuli_stop=5):
     baseline = frames_s_w[:,baseline_start:baseline_stop] 
     stimuli  = frames_s_w[:,stimuli_start:stimuli_stop]
 
-    baseline_mean = np.mean(baseline[np.where(np.mean(baseline,axis=(3,4))>50)],axis=0)
-    stimuli_mean  = np.mean(stimuli[np.where(np.mean(stimuli,axis=(3,4))>50)],axis=0)
+
+    baseline_mean = np.mean(baseline[np.where(np.mean(baseline,axis=(3,4))>1)],axis=0)
+    stimuli_mean  = np.mean(stimuli[np.where(np.mean(stimuli,axis=(3,4))>1)],axis=0)
+
 
     result = np.divide(baseline_mean - stimuli_mean,baseline_mean)
+
+    #baseline_fft = np.fft.fft2(baseline_mean)
+    #baseline_fft= np.fft.fftshift(baseline_fft)
 
     plt.figure()
     plt.title("Difference")
@@ -72,6 +79,10 @@ stimuli_start=3,stimuli_stop=5):
     plt.title("Stimuli")
     plt.imshow(stimuli_mean,cmap='gray')
     plt.show()
+    # plt.figure()
+    # plt.title("FFT")
+    # plt.imshow(20*np.log(np.abs(baseline_fft)),cmap='gray')
+    # plt.show()
 
 def main():
     sg.theme('BluePurple')
@@ -79,9 +90,10 @@ def main():
     layout = [[sg.Text('Select Image Folder'),sg.In(key='-in_folder-')],
             [sg.FolderBrowse(target='-in_folder-'), sg.OK()],
             [sg.Text('Row'),sg.Input(default_text='520',s=4,key='-in_row-'),sg.Text('Column'),sg.Input(default_text='696',s=4,key='-in_col-'),
-            sg.Text('Cutoff'), sg.Input(default_text='10',s=4,key='-in_cutoff-'),sg.Text('Max Frame'), sg.Input(default_text='500',s=4,key='-in_mf-')],
+            sg.Text('Cutoff'), sg.Input(default_text='10',s=4,key='-in_cutoff-'),sg.Text('Max Frame'), sg.Input(default_text='350',s=4,key='-in_mf-')],
             [sg.Text('Baseline'), sg.Input(default_text='0',s=2,key='-in_bl_sa-'),sg.Text('to'), sg.Input(default_text='2',s=2,key='-in_bl_so-'),
-            sg.Text('Stimuli'), sg.Input(default_text='3',s=2,key='-in_st_sa-'),sg.Text('to'), sg.Input(default_text='5',s=2,key='-in_st_so-')],
+            sg.Text('Stimuli'), sg.Input(default_text='3',s=2,key='-in_st_sa-'),sg.Text('to'), sg.Input(default_text='5',s=2,key='-in_st_so-'),
+            sg.Checkbox('Filter', default=True, key="-in_filter-"),sg.Input(default_text='5',s=2,key='-in_filter_size-')],
             [sg.Text(key='-OUTPUT-')],
             [sg.Button('Run'), sg.Button('Exit')]]
 
@@ -110,8 +122,10 @@ def main():
                 baseline_stop=int(values['-in_bl_so-'])
                 stimuli_start=int(values['-in_st_sa-'])
                 stimuli_stop=int(values['-in_st_so-'])
+                filtering = bool(values['-in_filter-'])
+                filter_size = int(values['-in_filter_size-'])
                 intrinsic_imaging(target_folder=folder, row=row, column=column, cutoff_time=cutoff, MAX_FRAMES=max_frame,baseline_start=baseline_start,baseline_stop=baseline_stop,
-    stimuli_start=stimuli_start,stimuli_stop=stimuli_stop)
+    stimuli_start=stimuli_start,stimuli_stop=stimuli_stop,filtering=filtering,filter_size=filter_size)
                 window['-OUTPUT-'].update(f"SUCCESS!!")
             else:
                 continue
